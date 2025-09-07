@@ -1,0 +1,29 @@
+#include <algorithm>
+#include <iostream>
+#include <iomanip>
+#include <vector>
+#include <string>
+#include <queue>
+#include <stack>
+#include <cmath>
+#include <set>
+#include <map>
+
+const int Inf = 1e9;
+const long long LInf = 1e18;
+const long double LEps = 1e-9;
+
+void solve() {
+
+}
+
+int main() {
+  std::ios_base::sync_with_stdio(false);
+  std::cin.tie(nullptr);
+
+  int t = 1;
+  //std::cin >> t;
+  while (t--) {
+    solve();
+  }
+}
