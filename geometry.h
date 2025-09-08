@@ -482,12 +482,126 @@ Circle Square::inscribedCircle() const {
   return tmp;
 }
 
+
 class Triangle: public Polygon {
  public:
-  Circle circumscribedCircle();
-  Circle inscribedCircle();
-  Point centroid();
-  Point orthocenter();
-  Line EulerLine();
-  Circle ninePointsCircle();
+  Triangle(const std::vector<Point>& vertices);
+  Triangle(std::initializer_list<Point> vertices);
+
+  Circle circumscribedCircle() const;
+  Circle inscribedCircle() const;
+  Point centroid() const;
+  Point circumcenter() const;
+  Point incenter() const;
+  Point orthocenter() const;
+  Line EulerLine() const;
+  Circle ninePointsCircle() const;
 };
+
+Triangle::Triangle(const std::vector<Point>& vertices)
+  : Polygon(vertices)
+  {}
+
+Triangle::Triangle(std::initializer_list<Point> vertices)
+  : Polygon(vertices)
+  {}
+
+Circle Triangle::circumscribedCircle() const {
+  const Point center = circumcenter();
+  const Point& A = vertices_[0];
+
+  long double r = sqrtl((A.x - center.x) * (A.x - center.x) +
+                          (A.y - center.y) * (A.y - center.y));
+
+  return { center, r };
+}
+
+Circle Triangle::inscribedCircle() const {
+  const Point center = incenter();
+  const Point& A = vertices_[0];
+  const Point& B = vertices_[1];
+  const Point& C = vertices_[2];
+
+  long double s = 0.5 * (A.x * (B.y - C.y) + B.x * (C.y - A.y) + C.x * (A.y - B.y));
+  if (s < 0) {
+    s = -s;
+  }
+
+  long double p = (Vector(A, B).length() +
+                   Vector(B, C).length() +
+                   Vector(C, A).length()) / 2.0;
+
+  long double r = s / p;
+  return { center, r };
+}
+
+Point Triangle::centroid() const {
+  return { (vertices_[0].x + vertices_[1].x + vertices_[2].x) / 3.0,
+           (vertices_[0].y + vertices_[1].y + vertices_[2].y) / 3.0 };
+}
+
+Point Triangle::circumcenter() const {
+  const Point& A = vertices_[0];
+  const Point& B = vertices_[1];
+  const Point& C = vertices_[2];
+
+  long double d = 2 * (A.x * (B.y - C.y) + B.x * (C.y - A.y) + C.x * (A.y - B.y));
+
+  long double x = ((A.x * A.x + A.y * A.y) * (B.y - C.y) +
+                   (B.x * B.x + B.y * B.y) * (C.y - A.y) +
+                   (C.x * C.x + C.y * C.y) * (A.y - B.y)) / d;
+
+  long double y = ((A.x * A.x + A.y * A.y) * (C.x - B.x) +
+                   (B.x * B.x + B.y * B.y) * (A.x - C.x) +
+                   (C.x * C.x + C.y * C.y) * (B.x - A.x)) / d;
+
+  return { x, y };
+}
+
+Point Triangle::incenter() const {
+  const Point& A = vertices_[0];
+  const Point& B = vertices_[1];
+  const Point& C = vertices_[2];
+
+  long double a = sqrtl((B.x - C.x) * (B.x - C.x) + (B.y - C.y) * (B.y - C.y));
+  long double b = sqrtl((A.x - C.x) * (A.x - C.x) + (A.y - C.y) * (A.y - C.y));
+  long double c = sqrtl((A.x - B.x) * (A.x - B.x) + (A.y - B.y) * (A.y - B.y));
+
+  long double x = (a * A.x + b * B.x + c * C.x) / (a + b + c);
+  long double y = (a * A.y + b * B.y + c * C.y) / (a + b + c);
+
+  return { x, y };
+}
+
+Point Triangle::orthocenter() const {
+  const Point center = circumcenter();
+  const Point& A = vertices_[0];
+  const Point& B = vertices_[1];
+  const Point& C = vertices_[2];
+
+  Point orthocenter = center +
+                      Vector(center, A) +
+                      Vector(center, B) +
+                      Vector(center, C);
+
+  return orthocenter;
+}
+
+Line Triangle::EulerLine() const {
+  const Point O = orthocenter();
+  const Point C = circumcenter();
+
+  return Line(O, C);
+}
+
+Circle Triangle::ninePointsCircle() const {
+  Point H = orthocenter();
+  Circle CC = circumscribedCircle();
+  Point O = CC.center();
+  long double r = CC.radius();
+
+  Point center((H.x + O.x) / 2, (H.y + O.y) / 2);
+  Circle NPC(center, r / 2);
+
+  return NPC;
+}
