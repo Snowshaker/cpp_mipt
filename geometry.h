@@ -3,15 +3,27 @@
 #include <initializer_list>
 #include <cmath>
 #include <limits>
+#include <numbers>
 
 const long double cEPS = 1e-9;
 const long double cINF = std::numeric_limits<long double>::max();
+const long double Pi = std::numbers::pi_v<long double>;
+
 
 bool are_equal(long double a, long double b) {
   return std::abs(a - b) < cEPS;
 }
 
+bool less_or_equal(long double a, long double b) {
+  return a < b || are_equal(a, b);
+}
+
+bool more_or_equal(long double a, long double b) {
+  return a > b || are_equal(a, b);
+}
+
 struct Vector;
+struct Line;
 
 struct Point {
   long double x;
@@ -28,7 +40,10 @@ struct Point {
   Point& operator-=(const Vector& v);
   Point operator-(const Vector& v) const;
 
-
+  void rotate(const Point& center, long double angle);
+  void reflect(const Point& center);
+  void reflect(const Line& axis);
+  void scale(const Point& center, long double coefficient);
 };
 
 Point::Point(long double x, long double y)
@@ -64,6 +79,7 @@ struct Vector {
   Vector(long double x, long double y);
   Vector(Point start, Point end);
 
+  void reverse();
   Vector operator-() const;
   Vector& operator+=(const Vector& other);
   friend Vector operator+(const Vector& lhs, const Vector& rhs);
@@ -76,7 +92,8 @@ struct Vector {
   friend Vector operator/(const Vector& lhs, const long double k);
   friend long double operator*(const Vector& lhs, const Vector& rhs);
   friend long double operator,(const Vector& lhs, const Vector& rhs);
-  long double length();
+  long double length() const;
+  void rotate(long double angle);
 };
 
 Vector::Vector()
@@ -92,11 +109,14 @@ Vector::Vector(Point start, Point end)
   : Vector(end.x - start.x, end.y - start.y)
 {}
 
+void Vector::reverse() {
+  x = -x;
+  y = -y;
+}
 
 Vector Vector::operator-() const {
   Vector tmp(*this);
-  tmp.x = -x;
-  tmp.y = -y;
+  tmp.reverse();
   return tmp;
 }
 
@@ -162,8 +182,15 @@ long double operator,(const Vector& lhs, const Vector& rhs) {
   return lhs.x * rhs.x + lhs.y * rhs.y;
 };
 
-long double Vector::length() {
+long double Vector::length() const {
   return sqrtl(x * x + y * y);
+}
+
+void Vector::rotate(long double angle) {
+  long double a_rad = angle * Pi / 180;
+  long double old_x = x;
+  x = old_x * cosl(a_rad) - y * sinl(a_rad);
+  y = old_x * sinl(a_rad) + y * cosl(a_rad);
 }
 
 
@@ -205,6 +232,7 @@ class Line {
 
   friend bool operator==(const Line& lhs, const Line& rhs);
   friend bool operator!=(const Line& lhs, const Line& rhs);
+  friend struct Point;
 };
 
 Line::Line(const Point& first, const Point& second)
@@ -240,19 +268,47 @@ bool operator!=(const Line& lhs, const Line& rhs) {
 }
 
 
+void Point::rotate(const Point& center, long double angle) {
+  Vector v(center, *this);
+
+  v.rotate(angle);
+  *this = center + v;
+}
+
+void Point::reflect(const Point& center) {
+  Vector v(*this, center);
+  *this = center + v;
+}
+
+void Point::reflect(const Line& axis) {
+  long double k = (axis.a_ * x + axis.b_ * y + axis.c_) / (axis.a_ * axis.a_ + axis.b_ * axis.b_);
+  long double mx = x - k * axis.a_;
+  long double my = y - k * axis.b_;
+  Point M(mx, my);
+
+  Vector v(*this, M);
+  *this = M + v;
+}
+
+void Point::scale(const Point& center, long double coefficient) {
+  Vector v(center, *this);
+  *this = center + v * coefficient;
+}
+
+
 class Shape {
  public:
-//  virtual long double perimeter() const = 0;
-//  virtual long double area() const = 0;
-//  virtual bool operator==(const Shape& other) const = 0;
-//  virtual bool isCongruentTo(const Shape& other) const = 0;
-//  virtual bool isSimilarTo(const Shape& other) const = 0;
-//  virtual bool containsPoint(const Point& point) const = 0;
-//
-//  virtual void rotate(const Point& center, long double angle) = 0;
-//  virtual void reflect(const Point& center) = 0;
-//  virtual void reflect(const Line& axis) = 0;
-//  virtual void scale(const Point& center, long double coefficient) = 0;
+  virtual long double perimeter() const = 0;
+  virtual long double area() const = 0;
+  virtual bool operator==(const Shape& other) const = 0;
+  virtual bool isCongruentTo(const Shape& other) const = 0;
+  virtual bool isSimilarTo(const Shape& other) const = 0;
+  virtual bool containsPoint(const Point& point) const = 0;
+
+  virtual void rotate(const Point& center, long double angle) = 0;
+  virtual void reflect(const Point& center) = 0;
+  virtual void reflect(const Line& axis) = 0;
+  virtual void scale(const Point& center, long double coefficient) = 0;
     virtual ~Shape() = default;
 };
 
@@ -268,6 +324,19 @@ class Polygon: public Shape {
   size_t verticesCount() const;
   const std::vector<Point>& getVertices() const;
   bool isConvex() const;
+
+  long double perimeter() const;
+  long double area() const;
+
+  void rotate(const Point& center, long double angle);
+  void reflect(const Point& center);
+  void reflect(const Line& axis);
+  void scale(const Point& center, long double coefficient);
+  bool containsPoint(const Point& point) const;
+
+  bool operator==(const Shape& other) const;
+  bool isCongruentTo(const Shape& other) const;
+  bool isSimilarTo(const Shape& other) const;
 };
 
 Polygon::Polygon(const std::vector<Point>& vertices)
@@ -304,8 +373,133 @@ bool Polygon::isConvex() const {
       return false;
     }
   }
+
   return flag != 3;
 }
+
+long double Polygon::perimeter() const {
+  long double p = 0;
+  for (int i = 0; i < vertices_.size(); ++i) {
+    p += Vector(vertices_[i], vertices_[(i + 1) % vertices_.size()]).length();
+  }
+
+  return p;
+}
+
+long double Polygon::area() const {
+  long double signed_area = 0;
+
+  for (int i = 0; i < vertices_.size(); ++i) {
+    const Point& p1 = vertices_[i];
+    const Point& p2 = vertices_[(i + 1) % vertices_.size()];
+    signed_area += (p1.x * p2.y - p2.x * p1.y);
+  }
+  signed_area /= 2.0;
+
+  long double area = std::abs(signed_area);
+  return area;
+}
+
+void Polygon::rotate(const Point& center, long double angle) {
+  for (auto& p : vertices_) {
+    p.rotate(center, angle);
+  }
+}
+
+void Polygon::reflect(const Point& center) {
+  for (auto& p : vertices_) {
+    p.reflect(center);
+  }
+}
+
+void Polygon::reflect(const Line& axis) {
+  for (auto& p : vertices_) {
+    p.reflect(axis);
+  }
+}
+
+void Polygon::scale(const Point& center, long double coefficient) {
+  for (auto& p : vertices_) {
+    p.scale(center, coefficient);
+  }
+}
+
+bool Polygon::containsPoint(const Point& point) const {
+  for (size_t i = 0; i < vertices_.size(); ++i) {
+    Vector edge_vec(vertices_[i], vertices_[(i + 1) % vertices_.size()]);
+    Vector point_vec(vertices_[i], point);
+    if (are_equal(edge_vec * point_vec, 0)) {
+      long double min_x = std::min(vertices_[i].x, vertices_[(i + 1) % vertices_.size()].x);
+      long double min_y = std::min(vertices_[i].y, vertices_[(i + 1) % vertices_.size()].y);
+      long double max_x = std::max(vertices_[i].x, vertices_[(i + 1) % vertices_.size()].x);
+      long double max_y = std::max(vertices_[i].y, vertices_[(i + 1) % vertices_.size()].y);
+
+      if (less_or_equal(min_x, point.x) && less_or_equal(point.x, max_x) &&
+          less_or_equal(min_y, point.y) && less_or_equal(point.y, max_y)) {
+        return true;
+      }
+    }
+  }
+
+  int intersections = 0;
+  for (size_t i = 0; i < vertices_.size(); ++i) {
+    Point p1(vertices_[i]);
+    Point p2(vertices_[(i + 1) % vertices_.size()]);
+
+    if (are_equal(p1.y, p2.y)) {
+      continue;
+    }
+
+    if ((less_or_equal(p1.y, point.y) && p2.y > point.y) || (less_or_equal(p2.y, point.y) && p1.y > point.y)) {
+      long double x_intersect = p1.x + (point.y - p1.y) * (p2.x - p1.x) / (p2.y - p1.y);
+
+      if (x_intersect > point.x) {
+        ++intersections;
+      }
+    }
+  }
+
+  return intersections % 2;
+}
+
+bool point_cmp(const Point& a, const Point& b) {
+  if (!are_equal(a.x, b.x)) return a.x < b.x;
+  return a.y < b.y;
+}
+
+bool Polygon::operator==(const Shape& other) const {
+  if (const Polygon* other_polygon = dynamic_cast<const Polygon*>(&other)) {
+    if (this->verticesCount() != other_polygon->verticesCount()) {
+      return false;
+    }
+
+    auto vertices1 = this->getVertices();
+    auto vertices2 = other_polygon->getVertices();
+
+    std::sort(vertices1.begin(), vertices1.end(), point_cmp);
+    std::sort(vertices2.begin(), vertices2.end(), point_cmp);
+
+    for (size_t i = 0; i < vertices1.size(); ++i) {
+      if (vertices1[i] != vertices2[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+  return false;
+}
+
+bool Polygon::isCongruentTo(const Shape& other) const {
+  if (const Polygon* other_polygon = dynamic_cast<const Polygon*>(&other)) {
+    if (this->verticesCount() != other_polygon->verticesCount()) {
+      return false;
+    }
+    std::vector<long double> edge_lengths;
+  }
+  return false;
+}
+
+bool isSimilarTo(const Shape& other) const;
 
 
 class Rectangle: public Polygon {
@@ -379,6 +573,19 @@ class Ellipse: public Shape {
   long double eccentricity() const;
   Point center() const;
   long double focal_length() const;
+  long double semimajor_axis_length() const;
+  long double semiminor_axis_length() const;
+
+  long double perimeter() const;
+  long double area() const;
+
+  void rotate(const Point& center, long double angle);
+  void reflect(const Point& center);
+  void reflect(const Line& axis);
+  void scale(const Point& center, long double coefficient);
+  bool containsPoint(const Point& point) const;
+
+  bool operator==(const Shape& other) const;
 };
 
 Ellipse::Ellipse(const Point& f1, const Point& f2, long double two_a)
@@ -432,11 +639,81 @@ long double Ellipse::focal_length() const {
   return sqrtl(x_delta * x_delta + y_delta * y_delta);
 }
 
+long double Ellipse::semimajor_axis_length() const {
+  long double l = two_a_ / 2.0;
+  return l;
+}
+
+long double Ellipse::semiminor_axis_length() const {
+  long double a = semimajor_axis_length();
+  long double c = focal_length();
+  long double b = sqrtl(a * a - c * c);
+
+  return b;
+}
+
+long double Ellipse::perimeter() const {
+  long double a = semimajor_axis_length();
+  long double b = semiminor_axis_length();
+  long double p = Pi * (3 * (a + b) - (sqrtl((3 * a + b) * (a + 3 * b))));
+
+  return p;
+}
+
+long double Ellipse::area() const {
+  long double s =  Pi * semimajor_axis_length() * semiminor_axis_length();
+
+  return s;
+}
+
+void Ellipse::rotate(const Point& center, long double angle) {
+  f1_.rotate(center, angle);
+  f2_.rotate(center, angle);
+}
+
+void Ellipse::reflect(const Point& center) {
+  f1_.reflect(center);
+  f2_.reflect(center);
+}
+
+void Ellipse::reflect(const Line& axis) {
+  f1_.reflect(axis);
+  f2_.reflect(axis);
+}
+
+void Ellipse::scale(const Point& center, long double coefficient) {
+  f1_.scale(center, coefficient);
+  f2_.scale(center, coefficient);
+  two_a_ *= coefficient;
+}
+
+bool Ellipse::containsPoint(const Point& point) const {
+  Vector v1(f1_, point);
+  Vector v2(f2_, point);
+  long double sum = v1.length() + v2.length();
+
+  return sum <= two_a_;
+}
+
+bool Ellipse::operator==(const Shape& other) const {
+  if (const Ellipse* other_ellipse = dynamic_cast<const Ellipse*>(&other)) {
+    if (((this->f1_ == other_ellipse->f1_ && this->f2_ == other_ellipse->f2_) ||
+      (this->f1_ == other_ellipse->f2_ && this->f2_ == other_ellipse->f1_)) &&
+      (this->two_a_ == other_ellipse->two_a_)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 
 class Circle: public Ellipse {
  public:
   Circle(const Point& p, long double r);
   long double radius() const;
+
+  long double perimeter() const override;
+  long double area() const override;
 };
 
 Circle::Circle(const Point& p, long double r)
@@ -445,6 +722,19 @@ Circle::Circle(const Point& p, long double r)
 
 long double Circle::radius() const {
   return two_a_ / 2;
+}
+
+long double Circle::perimeter() const {
+  long double p = 2.0 * Pi * radius();
+
+  return p;
+}
+
+long double Circle::area() const {
+  long double r = radius();
+  long double a = Pi * r * r;
+
+  return a;
 }
 
 
